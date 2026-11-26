@@ -66,6 +66,90 @@ Currency=Different үед хүсэлтийн amount-ийг
 DailyLimit нь хүсэлтийн body-д байхгүй боловч
 шилжүүлгийн үр дүнд нөлөөлдөг далд орчны нөхцөл юм.
 
+## 4. A2 — Хязгаарлалтууд
+
+### 4.1. Алдааны давуу эрэмбэ
+
+| Эрэмбэ | Нөхцөл | Oracle |
+|---|---|---|
+| 1 | From=Missing | ERROR_NO_FROM |
+| 2 | From=Frozen | ERROR_FROZEN |
+| 3 | To=Missing | ERROR_NO_TO |
+| 4 | To=SameAsFrom | ERROR_SAME_ACCOUNT |
+| 5 | Amount=Negative эсвэл Zero | ERROR_BAD_AMOUNT |
+| 6 | Amount=OverBalance | ERROR_INSUFFICIENT |
+| 7 | DailyLimit=Exceeded | ERROR_LIMIT |
+
+Дансны хүчинтэй байдал, дүн, үлдэгдэл, лимит
+гэсэн дарааллаар шалгах давуу эрэмбийг сонгосон.
+Учир нь данс хүчинтэй болсны дараа санхүүгийн
+нөхцөлийг шалгах нь логик дараалалтай.
+
+### 4.2. Хязгаарлалтын тэмдэглэгээ
+
+| Category | Choice | Тэмдэглэгээ | Үндэслэл |
+|---|---|---|---|
+| From | Valid | [property Active, Exists] | Хэвийн данс |
+| From | Frozen | [ERROR] [property Exists] | Царцаагдсан данс |
+| From | Missing | [ERROR] | Данс байхгүй |
+| To | Valid | [property Distinct] | Хүчинтэй өөр данс |
+| To | Missing | [ERROR] | Хүлээн авагч байхгүй |
+| To | SameAsFrom | [ERROR] [IF Exists] | Ижил данс бодитоор байна |
+| Amount | Negative | [ERROR] | Сөрөг дүн зөвшөөрөхгүй |
+| Amount | Zero | [ERROR] | Тэг дүн зөвшөөрөхгүй |
+| Amount | Normal | [property Positive] | Хэвийн эерэг дүн |
+| Amount | ExactBalance | [SINGLE] [IF Active] | Үлдэгдлийн хилийн утга |
+| Amount | OverBalance | [ERROR] [IF Active] | Үлдэгдэл хүрэлцэхгүй |
+| Currency | Same | [property NoConversion] | Хөрвүүлэлтгүй |
+| Currency | Different | [property Conversion] | Валют хөрвүүлнэ |
+| DailyLimit | Available | [property LimitOK] | Лимит хүрэлцээтэй |
+| DailyLimit | Exact | [SINGLE] [IF Positive] | Лимитийн хилийн утга |
+| DailyLimit | Exceeded | [ERROR] [IF Positive] | Лимит хэтэрсэн |
+
+### 4.3. Тест сонгох дүрэм
+
+1. Хэвийн нөхцөлд From=Valid, To=Valid,
+   Amount=Normal, DailyLimit=Available байна.
+   Currency нь Same эсвэл Different байна.
+2. ERROR сонголт бүрийг бусад хэвийн утгатай
+   тусгаарлан нэг удаа шалгана.
+3. SINGLE сонголт бүрийг нэг тусгай тестээр шалгана.
+4. SameAsFrom нь бодитоор байгаа данстай байна.
+5. Negative болон Zero үед DailyLimit=Available байна.
+6. From=Missing үед үлдэгдэл, лимитийг шалгахгүй
+   тул хэвийн placeholder ашиглана.
+7. Валют хөрвүүлсний дараах үлдэгдлийн алдааг
+   нэг нэмэлт тестээр шалгана.
+8. Алдааны давуу эрэмбийг шалгах зорилгоор
+   Frozen болон Missing нөхцөлийг нэг тестэд
+   зориуд хослуулна.
+
+### 4.4. N → M тооцоо
+
+Хязгаарлалтгүй бүрэн олонлог:
+
+N = 3 × 3 × 5 × 2 × 3 = 270
+
+| Тестийн бүлэг | Тооцоо | Тоо |
+|---|---|---:|
+| Хэвийн нөхцөл | 1 × 1 × 1 × 2 × 1 | 2 |
+| Тусгаарласан ERROR | 2 + 2 + 3 + 1 | 8 |
+| SINGLE нөхцөл | 1 + 1 | 2 |
+| Хөрвүүлэлттэй нэмэлт алдаа | 1 | 1 |
+| Зориудын давхар алдаа | 1 | 1 |
+| Нийт | 2 + 8 + 2 + 1 + 1 | 14 |
+
+M = 14
+
+270 → 14
+
+Бууралт = (270 - 14) / 270 × 100 = 94.81%
+
+M нь ERROR, SINGLE, IF болон нэмэлт сонголтын
+дүрмээр боловсруулсан гар тестийн хүрээ юм.
+PICT-ийн гаралтын мөрийн тооноос ялгаатай.
+
+
 ## 5. A3 — Тест спецификацийн хүснэгт
 
 | ID | From | To | Amount | Currency | DailyLimit | Expected result |
@@ -82,17 +166,17 @@ DailyLimit нь хүсэлтийн body-д байхгүй боловч
 | TC10 | Valid | Valid | Normal | Same | Exceeded | 200 ERROR_LIMIT |
 | TC11 | Valid | Valid | ExactBalance | Same | Available | 201 OK |
 | TC12 | Valid | Valid | Normal | Same | Exact | 201 OK |
-| TC13 | Valid | Valid | Normal | Different | Available | 201 OK |
+| TC13 | Valid | Valid | OverBalance | Different | Available | 200 ERROR_INSUFFICIENT |
 | TC14 | Frozen | Missing | Normal | Same | Available | 200 ERROR_FROZEN |
 
 ### Тусгай нөхцөлийн тайлбар
 
-- TC01, TC02, TC13: Happy path.
+- TC01, TC02: Happy path.
 - TC03–TC10: Бүх ERROR сонголтыг тусгаарлан шалгана.
 - TC11: SINGLE — үлдэгдэлтэй яг тэнцүү дүн.
 - TC12: SINGLE — үлдсэн лимиттэй яг тэнцүү дүн.
-- TC13: TC02-оос өөр хөрвүүлэлтийн төлөөлөх дүн,
-  жишээ нь 0.2 USD = 700 MNT.
+- TC13: 0.286 USD = 1001 MNT.
+  Хөрвүүлсний дараах дүн үлдэгдлээс хэтэрнэ.
 - TC14: Зориудын давхар алдаа.
   From=Frozen нь To=Missing-ээс өндөр эрэмбэтэй
   тул ERROR_FROZEN буцна.
