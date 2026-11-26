@@ -1,0 +1,11 @@
+From: Valid, Frozen, Missing
+To: Valid, Missing, SameAsFrom
+Amount: Negative, Zero, Normal, ExactBalance, OverBalance
+Currency: Same, Different
+DailyLimit: Available, Exact, Exceeded
+
+IF [From] = "Missing" THEN [To] <> "SameAsFrom";
+IF [From] = "Missing" THEN [Amount] = "Normal";
+IF [From] = "Missing" THEN [DailyLimit] = "Available";
+IF [Amount] IN {"Negative", "Zero"} THEN [DailyLimit] = "Available";
+IF [Amount] IN {"ExactBalance", "OverBalance"} THEN [From] = "Valid";
